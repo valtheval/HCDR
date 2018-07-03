@@ -1,8 +1,9 @@
 #coding : utf-8
 import numpy as np
 import pandas as pd
-from scipy.stats import chi2_contingency, levene, ttest_ind
-
+from scipy.stats import chi2_contingency, levene, ttest_ind, norm, ks_2samp, mannwhitneyu, f_oneway, pearsonr,\
+    spearmanr, kruskal
+from itertools import combinations
 
 class DataExplorer():
 
@@ -10,7 +11,7 @@ class DataExplorer():
         pass
 
 
-    def compute_basic_stat_one_var(self, serie, nb_cat_max):
+    def compute_basic_stat_one_var(self, serie, nb_cat_max=20):
         stat_desc = {}
         name = serie.name
         nb_elem = len(serie)
@@ -34,7 +35,7 @@ class DataExplorer():
             stat_desc[name]['maximum'] = serie.max()
         return stat_desc
 
-    def compute_basic_stat(self, df, nb_cat_max, compute_corr=False):
+    def compute_basic_stat(self, df, nb_cat_max=20, compute_corr=False):
         stat_desc = {}
         for c in df.columns:
             stat_desc[c] = self.compute_basic_stat_one_var(df[c], nb_cat_max)[c]
@@ -51,9 +52,9 @@ class DataExplorer():
             df_stat_desc = pd.concat([df_stat_desc, df_corr[['var_max_corr', 'max_coef_corr']]], axis=1)
         return df_stat_desc
 
-    def variables_relation(self, var1, var2):
+    def relation_independant_var(self, var1, var2, conditions_thresholds=0.05):
         """
-
+        Assess relation between 2 variables of a dataframe
         :param var1: pandas series. To be considered as categorical it must be either of dtype string (object) or
         category
         :param var2: pandas series. To be considered as categorical it must be either of dtype string (object) or
@@ -61,19 +62,20 @@ class DataExplorer():
         :return: (s, p, name) stat, p-value and name of  statistical test used to measure the link between the 2
         variables
         """
-        if (var1.dtype == "object") or (var1.dtype == "category"):
-            if (var2.dtype == "object") or (var2.dtype == "category"):
+        ct = conditions_thresholds
+        if (var1.dtype == "object") or (var1.dtype.name == "category"):
+            if (var2.dtype == "object") or (var2.dtype.name == "category"):
+                # TODO si effectif < 5 il faut faire un test exact de fisher
                 return self._chi2_test(var1,var2)
             else:
                 cat = [u for u in var1.unique() if not pd.isnull(u)]
                 nb_cat = len(cat)
-                #TODO
-                if nb_cat==2:#ttest
+                if nb_cat==2:#ttest (ou welch test)
                     var21 = var2[(var1==cat[0])]
                     var22 = var2[(var1==cat[1])]
                     if (len(var22)>=30) & (len(var22)>=30):
-                        #Pas de test de normalité
-                        var_egal = (self._levene_test(var21, var22)[1]<0.05)
+                        #No need of normality test
+                        var_egal = (self._levene_test(var21, var22)[1]<ct)
                         if var_egal:
                             #ttest
                             return self._ttest_ind(var21, var22, True)
@@ -81,9 +83,9 @@ class DataExplorer():
                             #Welch test
                             return self._ttest_ind(var21, var22, False)
                     else:
-                        normal = True # TODO faire test de normalité (kolmogorov)
+                        normal = (self._ks_normal(var21)[1]<ct) & (self._ks_normal(var22)[1]<ct)
                         if normal:
-                            var_egal = (self._levene_test(var21, var22)[1]<0.05)
+                            var_egal = (self._levene_test(var21, var22)[1]<ct)
                             if var_egal:
                                 #ttest
                                 return self._ttest_ind(var21, var22, True)
@@ -91,23 +93,40 @@ class DataExplorer():
                                 #Welch test
                                 return self._ttest_ind(var21, var22, False)
                         else:
-                            pass
+                            return self._wilcoxon(var21, var22)
                 elif nb_cat>2:#ANOVA
+                    samples = [var2[(var1==c)] for c in cat]
                     if len(var2)>=30:
-                        #Pas de test de normalité
-                        var_egal = True #TODO faire test d'égalité des variances
+                        #No need of normality test
+                        var_egal = bool(np.prod([self._levene_test(c[0], c[1])[1]<ct for c in combinations(samples, 2)]))
                         if var_egal:
-                            #TODO test de student
+                            return self._anova(*samples)
                         else:
-                            # Test de welch
-                pass
+                            s, p, _ = self._anova(*samples)
+                            return s, p, "anova_no_var_equal"
+                    else:
+                        normal = bool(np.prod([self._ks_normal(s)[1]<ct for s in samples]))
+                        if normal:
+                            var_egal = bool(np.prod([self._levene_test(c[0], c[1])[1]<ct for c in combinations(samples, 2)]))
+                            if var_egal:
+                                return self._anova(*samples)
+                            else:
+                                s, p, _ = self._anova(*samples)
+                                return s, p, "anova_no_var_equal"
+                        else:
+                            return self._kruskal(*samples)
+                else:
+                    print("no test")
+                    return np.nan, np.nan, "no_test"
         else:
-            if (var2.dtype == "object") or (var2.dtype == "category"):
-                #TODO
-                pass
+            if (var2.dtype == "object") or (var2.dtype.name == "category"):
+                return self.relation_independant_var(var2, var1, ct)
             else:
-                #TODO
-                pass
+                normal = (self._ks_normal(var1)[1]<ct) & (self._ks_normal(var2)[1]<ct)
+                if normal:
+                    return self._pearson(var1, var2)
+                else:
+                    return self._spearman(var1, var2)
 
     def _chi2_test(self, var1, var2):
         contingency_table = pd.crosstab(var1, var2).values
@@ -121,6 +140,34 @@ class DataExplorer():
     def _ttest_ind(self, var1, var2, equal_var=True):
         s, p = ttest_ind(var1.values, var2.values, equal_var)
         return s, p, "ttest_ind_var_eq_is_%s"%(str(equal_var))
+
+    def _ks_2samp(self, var1, var2):
+        s, p = ks_2samp(var1.values, var2.values)
+        return s, p, "kolmogorov_smirnof_2samples"
+
+    def _ks_normal(self, var):
+        norm_dist = norm.rvs(size=len(var), loc=np.mean(var.values), scale=np.var(var.values))
+        return self._ks_2samp(var, pd.Series(norm_dist))
+
+    def _wilcoxon(self, var1, var2):
+        s, p = mannwhitneyu(var1.values, var2.values, alternative='two-sided')
+        return s, p, "wilcoxon_rank_test_2sided"
+
+    def _anova(self, *args):
+        s, p = f_oneway(*args)
+        return s, p, "anova"
+
+    def _kruskal(self, *args):
+        s, p = kruskal(*args)
+        return s, p, "kruskal"
+
+    def _pearson(self, var1, var2):
+        s, p = pearsonr(var1.values, var2.values)
+        return s, p, "pearson"
+
+    def _spearman(self, var1, var2):
+        s, p = spearmanr(var1.values, var2.values)
+        return s, p, "spearman"
 
 
 
