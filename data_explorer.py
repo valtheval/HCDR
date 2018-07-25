@@ -1,4 +1,4 @@
-#coding : utf-8
+# coding: utf-8
 import numpy as np
 import pandas as pd
 from scipy.stats import chi2_contingency, levene, ttest_ind, norm, ks_2samp, mannwhitneyu, f_oneway, pearsonr,\
@@ -10,8 +10,31 @@ class DataExplorer():
     def __init__(self):
         pass
 
+    def get_empty_columns(self, df, threshold):
+        """
+        Return the list of the columns of df that have more than threshold prportion of empty value
+        :param df: pandas dataframe
+        :param threshold: float between 0 and 1
+        :return: string list, list of columns' name
+        """
+        empty_col = []
+        nb_elem = len(df)
+        for col in df.columns:
+            nb_empty = df[col].isnull().sum()
+            p_empty = float(nb_empty)/nb_elem
+            if p_empty > threshold:
+                empty_col.append(col)
+        return empty_col
 
     def compute_basic_stat_one_var(self, serie, nb_cat_max=20):
+        """
+        Compute basic statistic for 1 pandas serie
+        :param serie: pandas serie
+        :param nb_cat_max: max number of different values to display. If the serie has less than this number we display
+        all the category, otherwise none are displayed
+        :return: Dictionnary of the form with type, nb and percentage of empty value, number of categories and number of
+         element per category, mean, std, min, max for float var
+        """
         stat_desc = {}
         name = serie.name
         nb_elem = len(serie)
@@ -36,6 +59,14 @@ class DataExplorer():
         return stat_desc
 
     def compute_basic_stat(self, df, nb_cat_max=20, compute_corr=False):
+        """
+        Compute basic statistic for all the variables of df
+        :param df: pandas dataframe
+        :param nb_cat_max: int, max number of different values to display. If the serie has less than this number we display
+        all the category, otherwise none
+        :param compute_corr: boolean, to compute the most correlated variable with the current variable
+        :return:
+        """
         stat_desc = {}
         for c in df.columns:
             stat_desc[c] = self.compute_basic_stat_one_var(df[c], nb_cat_max)[c]
@@ -59,6 +90,8 @@ class DataExplorer():
         category
         :param var2: pandas series. To be considered as categorical it must be either of dtype string (object) or
         category
+        :param conditions_thresholds: float, threshold for p-value used when checking conditions of test application
+        (normality condition, variance equality...)
         :return: (s, p, name) stat, p-value and name of  statistical test used to measure the link between the 2
         variables
         """
