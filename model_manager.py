@@ -2,7 +2,7 @@
 
 
 class ModelManager():
-
+    # Modeling is performed only on numerical values. Data need to be preprocessed in order be set to the right type
 
     def __init__(self):
         pass

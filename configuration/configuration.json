@@ -2,7 +2,7 @@
   "files" : {"application_test":"/Users/valentinmasdeu/Documents/8 - Projets/HCDR/data/application_test.csv",
              "application_train":"/Users/valentinmasdeu/Documents/8 - Projets/HCDR/data/application_train.csv",
              "bureau":"/Users/valentinmasdeu/Documents/8 - Projets/HCDR/data/bureau.csv",
-             "bureau_balance.csv":"/Users/valentinmasdeu/Documents/8 - Projets/HCDR/data/bureau_balance.csv",
+             "bureau_balance":"/Users/valentinmasdeu/Documents/8 - Projets/HCDR/data/bureau_balance.csv",
              "credit_card_balance":"/Users/valentinmasdeu/Documents/8 - Projets/HCDR/data/credit_card_balance.csv",
              "HomeCredit_columns_description":"/Users/valentinmasdeu/Documents/8 - Projets/HCDR/data/HomeCredit_columns_description.csv",
              "installments_payments":"/Users/valentinmasdeu/Documents/8 - Projets/HCDR/data/installments_payments.csv",

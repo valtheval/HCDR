@@ -1,20 +1,39 @@
 # coding: utf-8
 import pandas as pd
-import scipy
 
-class Joiner():
+
+class Flattener():
 
     def __init__(self):
         pass
 
 
-    def join(self, right, left, on, how='inner', **kwargs):
+    def join(self, right, left, on, how='inner', drop_existing_column=None, **kwargs):
+
+        if not isinstance(on, list):
+            on = [on]
+
+        right_columns = right.columns
+        left_columns = left.columns
+
+        if drop_existing_column == 'left':
+            left_columns = [c_l for c_l in left_columns if ((c_l not in right_columns) or (c_l in on))]
+            left = left[left_columns]
+        elif drop_existing_column == 'right':
+            right_columns = [c_r for c_r in right_columns if ((c_r not in left_columns) or (c_r in on))]
+            right = right[right_columns]
+        elif drop_existing_column is None:
+            pass
+        else:
+            raise "Wrong argument for drop_existing_column, must be None, left or right"
+
         return pd.merge(right, left, on=on, how=how, **kwargs)
 
     def map(self, df, agg_key, numerical_features_agg='mean', categorical_features_agg='most_frequent'):
         categorical_features = list(df.select_dtypes(include = ["object", 'category']).columns)
         numerical_features = list(df.select_dtypes(include = ["float", "int"]).columns)
-
+        #print(numerical_features)
+        #print(categorical_features)
         if not isinstance(agg_key, list):
             agg_key = [agg_key]
 
@@ -26,13 +45,11 @@ class Joiner():
 
         if len(numerical_features)>len(agg_key):
             df_num = df[numerical_features].copy()
-            print("groupby num features")
             df_num_grp = df_num.groupby(agg_key).agg(numerical_features_agg).reset_index()
         else:
             df_num_grp = None
         if len(categorical_features)>len(agg_key):
             df_cat = df[categorical_features].copy()
-            print("groupby cat features")
             if categorical_features_agg == 'most_frequent':
                 df_cat_grp = self._most_frequent(df_cat, agg_key)
         else:
@@ -40,7 +57,6 @@ class Joiner():
         #df_cat_grp = df_cat.groupby(agg_key).agg(self._most_frequent).reset_index()
         if df_num_grp is not None:
             if df_cat_grp is not None:
-                print("merging")
                 df_merge = pd.merge(df_num_grp, df_cat_grp, how='outer', on=agg_key)
             else:
                 return df_num_grp

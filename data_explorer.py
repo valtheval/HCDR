@@ -12,7 +12,7 @@ class DataExplorer():
 
     def get_empty_columns(self, df, threshold):
         """
-        Return the list of the columns of df that have more than threshold prportion of empty value
+        Return the list of the columns of df that have more than threshold proportion of empty values
         :param df: pandas dataframe
         :param threshold: float between 0 and 1
         :return: string list, list of columns' name
